@@ -1,58 +1,111 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Reflection.Metadata;
+using System.Globalization;
 
 namespace Backend;
 
 public static class ExpressionEvaluator
 {
-    public static double Evalute(string infix) => EvalutePostfix(ToPostfix(infix));
+    public static double Evalute(string infix) => EvalutePostfix(ToPostfix(Tokenize(infix)));
 
-    private static string ToPostfix(string infix)
+    private static List<string> Tokenize(string infix)
     {
-        var posfix = string.Empty;
-        var stack = new Stack<char>();
+        var tokens = new List<string>();
+        var number = string.Empty;
         foreach (var item in infix)
         {
+            if (char.IsDigit(item) || item == '.')
+            {
+                number += item; // build the full number
+                continue;
+            }
+            if (number.Length > 0)
+            {
+                ValidateNumber(number);
+                tokens.Add(number);
+                number = string.Empty;
+            }
+            if (item == ' ')
+            {
+                continue;
+            }
             if (IsOperator(item))
             {
+                tokens.Add(item.ToString());
+            }
+            else
+            {
+                throw new Exception($"Invalid character: '{item}'.");
+            }
+        }
+        if (number.Length > 0)
+        {
+            ValidateNumber(number);
+            tokens.Add(number);
+        }
+        if (tokens.Count == 0)
+        {
+            throw new Exception("Invalid expression.");
+        }
+        return tokens;
+    }
+
+    private static void ValidateNumber(string number)
+    {
+        if (number.Count(c => c == '.') > 1)
+        {
+            throw new Exception($"Invalid number: '{number}'.");
+        }
+    }
+
+    private static List<string> ToPostfix(List<string> tokens)
+    {
+        var posfix = new List<string>();
+        var stack = new Stack<char>();
+        foreach (var token in tokens)
+        {
+            if (token.Length == 1 && IsOperator(token[0]))
+            {
+                var item = token[0];
                 if (item == ')')
                 {
-                    var ope = stack.Pop();
-                    while(ope != '(')
+                    if (stack.Count == 0)
                     {
-                        posfix += ope;
+                        throw new Exception("Unbalanced parentheses.");
+                    }
+                    var ope = stack.Pop();
+                    while (ope != '(')
+                    {
+                        posfix.Add(ope.ToString());
+                        if (stack.Count == 0)
+                        {
+                            throw new Exception("Unbalanced parentheses.");
+                        }
                         ope = stack.Pop();
                     }
                 }
                 else
                 {
-                    if (stack.Count == 0)
+                    // pop while the stack has priority over the incoming operator
+                    while (stack.Count != 0 && PriorityInfix(item) <= PriorityStack(stack.Peek()))
                     {
-                        stack.Push(item);
+                        posfix.Add(stack.Pop().ToString());
                     }
-                    else
-                    {
-                        if (PriorityInfix(item) > PriorityStack(stack.Peek()))
-                        {
-                            stack.Push(item);
-                        }
-                        else
-                        {
-                            posfix += stack.Pop();
-                            stack.Push(item);
-                        }
-                    }
+                    stack.Push(item);
                 }
             }
             else
             {
-                posfix += item;
+                posfix.Add(token);
             }
         }
-        do
+        while (stack.Count != 0)
         {
-            posfix += stack.Pop();
-        } while (stack.Count != 0);
+            var ope = stack.Pop();
+            if (ope == '(')
+            {
+                throw new Exception("Unbalanced parentheses.");
+            }
+            posfix.Add(ope.ToString());
+        }
         return posfix;
     }
 
@@ -80,20 +133,21 @@ public static class ExpressionEvaluator
 
     private static bool IsOperator(char item) => item == '^' || item == '*' || item == '/' || item == '+' || item == '-' || item == '(' || item == ')';
 
-    private static double EvalutePostfix(string postfix)
+    private static double EvalutePostfix(List<string> postfix)
     {
         var stack = new Stack<double>();
-        foreach (var item in postfix)
+        foreach (var token in postfix)
         {
-            if (IsOperator(item))
+            if (token.Length == 1 && IsOperator(token[0]))
             {
                 var ope2 = stack.Pop();
                 var ope1 = stack.Pop();
-                stack.Push(Calculate(ope1, ope2, item));
+                stack.Push(Calculate(ope1, ope2, token[0]));
             }
             else
             {
-                stack.Push(char.GetNumericValue(item));
+                // use . as decimal separator
+                stack.Push(double.Parse(token, CultureInfo.InvariantCulture));
             }
         }
         return stack.Pop();
