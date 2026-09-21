@@ -140,6 +140,10 @@ public static class ExpressionEvaluator
         {
             if (token.Length == 1 && IsOperator(token[0]))
             {
+                if (stack.Count < 2)
+                {
+                    throw new Exception("Invalid expression.");
+                }
                 var ope2 = stack.Pop();
                 var ope1 = stack.Pop();
                 stack.Push(Calculate(ope1, ope2, token[0]));
@@ -149,6 +153,10 @@ public static class ExpressionEvaluator
                 // use . as decimal separator
                 stack.Push(double.Parse(token, CultureInfo.InvariantCulture));
             }
+        }
+        if (stack.Count != 1)
+        {
+            throw new Exception("Invalid expression.");
         }
         return stack.Pop();
     }
